@@ -1,4 +1,7 @@
 /*
+ * Author: Gabriele Salvato
+ * derived from the original work by:
+ * 
  * Copyright (c) 2015 Evan Kale
  * Email: EvanKale91@gmail.com
  * Website: www.ISeeDeadPixel.com
