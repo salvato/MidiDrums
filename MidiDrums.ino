@@ -40,12 +40,13 @@ midiEventPacket_t event;
 //Piezo defines
 #define NUM_PIEZOS 6
 #define SNARE_THRESHOLD 200    //anything < TRIGGER_THRESHOLD is treated as 0
-#define LTOM_THRESHOLD 200
-#define RTOM_THRESHOLD 200
-#define LCYM_THRESHOLD 40
-#define RCYM_THRESHOLD 60
-#define KICK_THRESHOLD 500
-#define START_SLOT 0     //first analog slot of piezos
+#define LTOM_THRESHOLD  200
+#define RTOM_THRESHOLD  200
+#define LCYM_THRESHOLD  40
+#define RCYM_THRESHOLD  60
+#define KICK_THRESHOLD  500
+#define START_ADC_SLOT  0     //first analog slot of piezos
+#define START_DIG_SLOT  22    //first digital slot of buttons
 
 
 //MIDI note defines for each trigger
@@ -58,7 +59,7 @@ midiEventPacket_t event;
 
 
 //MIDI defines
-#define DRUM_PATCH 9
+#define DRUM_CHAN 9
 #define MAX_MIDI_VELOCITY 127
 
 
@@ -77,6 +78,8 @@ unsigned short slotMap[NUM_PIEZOS];
 unsigned short noteMap[NUM_PIEZOS];
 //map that holds the respective threshold to each piezo
 unsigned short thresholdMap[NUM_PIEZOS];
+//map that holds the status of the digital inputs
+unsigned short digitalPinMap[NUM_PIEZOS];
 
 
 //Ring buffers to store analog signal and peaks
@@ -102,14 +105,14 @@ unsigned long lastNoteTime[NUM_PIEZOS];
 // Fourth parameter is the velocity (64 = normal, 127 = fastest).
 void 
 noteOn(byte channel, byte pitch, byte velocity) {
-  event = {0x09, 0x90 | channel, pitch, velocity};
+  event = {0x09, byte(0x90 | channel), pitch, velocity};
   MidiUSB.sendMIDI(event);
 }
 
 
 void 
 noteOff(byte channel, byte pitch, byte velocity) {
-  event = {0x08, 0x80 | channel, pitch, velocity};
+  event = {0x08, byte(0x80 | channel), pitch, velocity};
   MidiUSB.sendMIDI(event);
 }
 
@@ -120,14 +123,14 @@ noteOff(byte channel, byte pitch, byte velocity) {
 // Fourth parameter is the control value (0-127).
 void 
 controlChange(byte channel, byte control, byte value) {
-  event = {0x0B, 0xB0 | channel, control, value};
+  event = {0x0B, byte(0xB0 | channel), control, value};
   MidiUSB.sendMIDI(event);
 }
 
 
 void 
 programChange(byte channel, byte program) {
-  event = {0x0C, 0xC0 | channel, program, 0};
+  event = {0x0C, byte(0xC0 | channel), program, 0};
   MidiUSB.sendMIDI(event);
 }
 
@@ -184,10 +187,12 @@ recordNewPeak(short slot, short newPeak) {
 void 
 setup() {
   //initialize globals
-  chan = DRUM_PATCH;
+  chan = DRUM_CHAN;
   patch = 0;
   programChange(chan, patch);
   for(short i=0; i<NUM_PIEZOS; ++i) {
+    pinMode(START_DIG_SLOT+i, INPUT_PULLUP);
+    digitalPinMap[i] = digitalRead(START_DIG_SLOT+i);
     currentSignalIndex[i] = 0;
     currentPeakIndex[i] = 0;
     memset(signalBuffer[i],0,sizeof(signalBuffer[i]));
@@ -197,7 +202,7 @@ setup() {
     isLastPeakZeroed[i] = true;
     lastPeakTime[i] = 0;
     lastNoteTime[i] = 0;    
-    slotMap[i] = START_SLOT + i;
+    slotMap[i] = START_ADC_SLOT + i;
   }
   
   thresholdMap[0] = KICK_THRESHOLD;
@@ -235,31 +240,38 @@ loop() {
         short prevSignalIndex = currentSignalIndex[i]-1;
         if(prevSignalIndex < 0) prevSignalIndex = SIGNAL_BUFFER_SIZE-1;        
         unsigned short prevSignal = signalBuffer[i][prevSignalIndex];
-        
         unsigned short newPeak = 0;
-        
         //find the wave peak if previous signal was not 0 by going
         //through previous signal values until another 0 is reached
         while(prevSignal >= thresholdMap[i]) {
           if(signalBuffer[i][prevSignalIndex] > newPeak) {
             newPeak = signalBuffer[i][prevSignalIndex];        
           }
-          
           //decrement previous signal index, and get previous signal
           prevSignalIndex--;
           if(prevSignalIndex < 0) prevSignalIndex = SIGNAL_BUFFER_SIZE-1;
           prevSignal = signalBuffer[i][prevSignalIndex];
         }
-        
         if(newPeak > 0) {
           recordNewPeak(i, newPeak);
         }
       }
-  
     }
-        
     currentSignalIndex[i]++;
     if(currentSignalIndex[i] == SIGNAL_BUFFER_SIZE) currentSignalIndex[i] = 0;
+    
+    if(digitalRead(START_DIG_SLOT+i) != digitalPinMap[i]) {
+      if(digitalPinMap[i] == LOW) {
+        digitalPinMap[i] = HIGH;
+        noteOn(chan, noteMap[i], 127);
+        MidiUSB.flush();
+      }
+      else {
+        digitalPinMap[i] = LOW;
+        noteOff(chan, noteMap[i], 127);
+        MidiUSB.flush();
+      }
+    }
   }
 }
 
