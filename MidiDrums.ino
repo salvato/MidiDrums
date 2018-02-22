@@ -211,7 +211,14 @@ setup() {
   thresholdMap[3] = LCYM_THRESHOLD;
   thresholdMap[4] = SNARE_THRESHOLD;
   thresholdMap[5] = LTOM_THRESHOLD;  
-  
+  /*
+     #define SNARE_NOTE 38 // Rullante
+     #define LTOM_NOTE  43 // Tom
+     #define RTOM_NOTE  45 // Floor Tom
+     #define LCYM_NOTE  42 // Charlie Chiuso
+     #define RCYM_NOTE  51 // Piatto
+     #define KICK_NOTE  36 // Cassa
+  */
   noteMap[0] = KICK_NOTE;
   noteMap[1] = RTOM_NOTE;
   noteMap[2] = RCYM_NOTE;
@@ -263,12 +270,12 @@ loop() {
     if(digitalRead(START_DIG_SLOT+i) != digitalPinMap[i]) {
       if(digitalPinMap[i] == LOW) {
         digitalPinMap[i] = HIGH;
-        noteOn(chan, noteMap[i], 127);
+        noteOff(chan, noteMap[i], 127);
         MidiUSB.flush();
       }
       else {
         digitalPinMap[i] = LOW;
-        noteOff(chan, noteMap[i], 127);
+        noteOn(chan, noteMap[i], 127);
         MidiUSB.flush();
       }
     }
